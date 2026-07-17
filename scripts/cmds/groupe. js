@@ -1,0 +1,149 @@
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
+
+module.exports = {
+    config: {
+        name: "groupe",
+        aliases: ["makegroup", "newgroup", "cg", "supergroupe"],
+        version: "4.0",
+        author: "Célestin",
+        countDown: 10,
+        role: 0,
+        shortDescription: {
+            fr: "Crée un groupe complet (30 membres, image, admin et sticker)."
+        },
+        longDescription: {
+            fr: "Génère un salon, ajoute jusqu'à 30 membres, vous met admin, configure la photo du profil et envoie un sticker de bienvenue."
+        },
+        category: "box",
+        guide: {
+            fr: "• creergroupe [Nom du nouveau groupe]"
+        }
+    },
+
+    onChat: async function({ api, event, message, args }) {
+        if (!event.body) return;
+        const msg = event.body.toLowerCase().trim();
+        const trigger = msg.split(" ")[0];
+        
+        if (trigger === "creergroupe" || this.config.aliases.includes(trigger)) {
+            const newArgs = event.body.split(" ").slice(1);
+            return this.onStart({ api, event, args: newArgs, message });
+        }
+    },
+
+    onStart: async function({ api, event, args, message }) {
+        const senderID = event.senderID;
+        const threadID = event.threadID;
+        const groupName = args.join(" ").trim();
+
+        if (!event.isGroup) {
+            return message.reply("⚠️ Cette commande doit être exécutée dans un groupe existant.");
+        }
+
+        if (!groupName) {
+            return message.reply("⚠️ Tu dois spécifier un nom pour ton projet de salon.\nExemple : creergroupe L'Élite ⚔️");
+        }
+
+        try {
+            // 1. Récupération des participants du groupe actuel
+            const threadInfo = await api.getThreadInfo(threadID);
+            let allMembers = threadInfo.participantIDs;
+            const botID = api.getCurrentUserID();
+
+            // Filtrage (Pas de bot, pas l'auteur dans la file d'attente d'ajout)
+            allMembers = allMembers.filter(id => id !== botID && id !== senderID);
+
+            if (allMembers.length === 0) {
+                return message.reply("❌ Pas assez de membres éligibles pour cloner ce salon.");
+            }
+
+            // Préparation des participants de base pour la création (Toi + un ami obligatoire)
+            const firstPartner = allMembers.shift();
+            const initialParticipants = [senderID, firstPartner];
+
+            // Choix automatique et aléatoire de 30 membres maximum parmi le reste
+            const extraMembers = allMembers.sort(() => 0.5 - Math.random()).slice(0, 30);
+
+            message.reply(`🏗️ Lancement de la création du groupe "${groupName}"...\n📸 Configuration de la photo, du sticker et ajout de ${extraMembers.length + 1} pirates programmé !`);
+
+            // 2. Création initiale du groupe via l'API
+            api.createNewGroup(initialParticipants, groupName, async (err, newThreadID) => {
+                if (err) {
+                    console.error(err);
+                    return message.reply("❌ L'API Facebook a rejeté la demande de création.");
+                }
+
+                // Pause de synchronisation serveur
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // 3. Nomination immédiate du Créateur en ADMIN 👑
+                try {
+                    await api.changeAdminStatus(newThreadID, senderID, true);
+                } catch (e) {
+                    console.error("Échec droits admins:", e);
+                }
+
+                // 4. Téléchargement et application de la PHOTO du groupe
+                // Tu peux remplacer cette URL par n'allant vers l'image pirate ou manga que tu veux
+                const imgUrl = "https://i.imgur.com/v8Onw6N.png"; 
+                const avatarPath = path.join(__dirname, "cache", `avatar_${newThreadID}.png`);
+
+                try {
+                    const response = await axios.get(imgUrl, { responseType: "arraybuffer" });
+                    await fs.outputFile(avatarPath, Buffer.from(response.data));
+                    
+                    // On applique l'image téléchargée au nouveau groupe
+                    await api.changeGroupImage(fs.createReadStream(avatarPath), newThreadID);
+                    
+                    // Suppression propre du fichier temporaire
+                    fs.unlinkSync(avatarPath);
+                } catch (imgError) {
+                    console.error("Impossible de mettre la photo du groupe:", imgError);
+                }
+
+                // 5. Envoi du STICKER de bienvenue et célébration dans le nouveau chat
+                // ID 369239263222822 correspond à un sticker "Pouce bleu" classique ou un sticker fun.
+                try {
+                    await api.sendMessage({
+                        body: `🎉 Bienvenue dans le nouveau salon : ${groupName} !`,
+                        sticker: "369239263222822" 
+                    }, newThreadID);
+                } catch (stkErr) {
+                    console.error("Échec envoi sticker:", stkErr);
+                }
+
+                // 6. Ajout progressif en tâche de fond des 20-30 membres restants
+                let successCount = 1; // Le premier est déjà inclus
+
+                for (const memberID of extraMembers) {
+                    try {
+                        await api.addUserToGroup(memberID, newThreadID);
+                        successCount++;
+                        // Pause d'une seconde et demi pour tromper la sécurité anti-spam
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                    } catch (addError) {
+                        console.error(`Impossible d'ajouter l'UID ${memberID}:`, addError);
+                    }
+                }
+
+                // Rapport final envoyé dans le canal d'origine
+                return message.reply(
+                    `🎁 𝑺𝑼𝑷𝑬𝑹𝑮𝑹𝑶𝑼𝑷𝑬 𝑪𝑹𝑬́𝑬́ 𝑨𝑽𝑬𝑪 𝑺𝑼𝑼𝑪𝑬̀𝑺 !\n\n` +
+                    `👑 𝑺𝒂𝒍𝒐𝒏 : ${groupName}\n` +
+                    `🆔 𝑰𝑫 : ${newThreadID}\n` +
+                    `📸 𝑷𝒉𝒐𝒕𝒐 𝒅𝒆 𝒑𝒓𝒐𝒇𝒊𝒍 : Installée avec succès.\n` +
+                    `✨ 𝑺𝒕𝒊𝒄𝒌𝒆𝒓 : Envoyé pour ouvrir le bal.\n` +
+                    `👥 𝑴𝒆𝒎𝒃𝒓𝒆𝒔 𝒂𝒋𝒐𝒖𝒕𝒆́𝒔 : ${successCount}/${extraMembers.length + 1} personnes transférées !\n\n` +
+                    `Tu as reçu la couronne de capitaine là-bas 😘. À l'abordage !`
+                );
+            });
+
+        } catch (error) {
+            console.error(error);
+            return message.reply("🩸 La tempête a fait échouer la configuration globale.");
+        }
+    }
+};
+
