@@ -18,8 +18,7 @@ module.exports = {
 
     // détecte "ai" au début même sans prefix
     if (text.startsWith("ai ")) {
-      return message.reply(
-`＊ ÉCRIT ANGELA SALUT 😒🥱💥✨
+      return message.reply( ANGELA SALUT 😒🥱💥✨
       );
     }
   }
