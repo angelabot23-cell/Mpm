@@ -3,6 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const googleTTS = require("google-tts-api");
 
+// ✅ Ajoute seulement ton lien direct vers la photo (.jpg/.png)
+const PHOTO_ANGEL = "https://ton-lien-direct-de-la-photo.jpg";
+
 // 📦 MEMORY
 const DB_FILE = path.join(__dirname, "angel_memory.json");
 
@@ -163,7 +166,16 @@ module.exports = {
 
     if (!isCalled && !isReplyToAngel) return;
 
-    // ✅ Récupérer le texte à traiter
+    // ✅ NOUVELLE RÈGLE AJOUTÉE : message EXACT = Angel / Ariel → envoie la photo
+    if (bodyLower === "angel" || bodyLower === "ariel") {
+      await message.reply({
+        body: "👋 Voici mon portrait officiel 🪽✨",
+        attachment: PHOTO_ANGEL
+      });
+      return;
+    }
+
+    // ✅ Récupérer le texte à traiter pour les autres demandes
     const input = isCalled ? body.replace(/^(angel|ariel)\s*/i, "").trim() : body;
     if (!input) return;
 
