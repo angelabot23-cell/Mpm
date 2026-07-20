@@ -19,10 +19,7 @@ module.exports = {
     // détecte "ai" au début même sans prefix
     if (text.startsWith("ai ")) {
       return message.reply(
-`＊┈┈┈┈＊┈┈┈┈＊┈┈┈┈
-❌ "ai" est désactivé
-👉 utilise : neo [message]
-＊┈┈┈┈＊┈┈┈┈＊┈┈┈┈`
+`＊ ÉCRIT ANGELA SALUT 😒🥱💥✨
       );
     }
   }
